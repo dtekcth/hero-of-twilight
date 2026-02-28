@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>DTek Links</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="style.css">
+        <script src="index.js"></script>
+    </head>
+    <body>
+        <template id="cardTemplate">
+            <div class="card">
+                <h2><a class="name"></a></h2>
+                <p class="description"></p>
+            </div>
+        </template>
+        <main>
+            <h1>DTek Links</h1>
+
+            <p>List of services hosted by the student division and useful links.</p>
+
+            <div id="cardHolder" class="cardHolder">
+            </div>
+            <div id="errorBox" hidden>
+                <h2>Error</h2>
+                <p id="errorMessage"></p>
+            </div>
+        </main>
+    </body>
+</html>

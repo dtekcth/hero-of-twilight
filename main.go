@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"html/template"
 	"log"
 	"net/http"
 	"slices"
@@ -23,9 +22,9 @@ type NomadNamespace struct {
 }
 
 type Service struct {
-	Name        string
-	Description string
-	Link        string
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Link        string `json:"link"`
 }
 
 type Config struct {
@@ -35,7 +34,6 @@ type Config struct {
 	Services       []Service
 }
 
-var Templates *template.Template
 var ServiceMutex sync.RWMutex
 var Services []Service
 var config   Config
@@ -120,9 +118,8 @@ func update() {
 			return
 		}
 
-		// Add static services and sort on name.
+		// Add static services.
 		services = append(services, config.Services...)
-		slices.SortFunc(services, func(a, b Service) int { return strings.Compare(a.Name, b.Name) })
 
 		ServiceMutex.Lock()
 		Services = services
@@ -131,11 +128,6 @@ func update() {
 }
 
 func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
-	if request.Method != "GET" {
-		response.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	ServiceMutex.RLock()
 	encoded, err := json.Marshal(Services)
 	ServiceMutex.RUnlock()
@@ -150,21 +142,6 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	response.Write(encoded)
 }
 
-func handleIndex(response http.ResponseWriter, request *http.Request) {
-	if request.Method != "GET" {
-		response.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	ServiceMutex.RLock()
-	err := Templates.ExecuteTemplate(response, "index.html", Services)
-	ServiceMutex.RUnlock()
-	if err != nil {
-		log.Println(err)
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-	}
-}
-
 func main() {
 	configBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
@@ -176,18 +153,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Load templates.
-	Templates, err = template.ParseGlob("templates/*.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	go update()
 
 	// Setup and start server.
-	http.HandleFunc("/", handleIndex)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.HandleFunc("/api/v1/services", handleApiV1Services)
+	http.Handle("/", http.FileServer(http.Dir("static")))
+	http.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
