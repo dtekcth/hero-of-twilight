@@ -1,0 +1,12 @@
+{
+    "url": "URL",
+    "token": "TOKEN",
+    "updateInterval": 60,
+    "services": [
+        {
+            "name": "DuckDuckGo",
+            "description": "The search engine",
+            "link": "https://duckduckgo.com/"
+        }
+    ]
+}
