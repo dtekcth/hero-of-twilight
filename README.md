@@ -1,4 +1,4 @@
-# hero-of-twiligth
+# hero-of-twilight
 
 Link discovery of Nomad services.
 
