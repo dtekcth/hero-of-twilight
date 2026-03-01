@@ -2,7 +2,7 @@
     "url": "URL",
     "token": "TOKEN",
     "updateInterval": 60,
-    "preferredNamespaces": [
+    "namespaces": [
         "prod", "backup"
     ],
     "services": [
