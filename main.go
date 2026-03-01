@@ -33,17 +33,18 @@ type Config struct {
 	Token          string
 	Url            string
 	UpdateInterval int
+	Namespaces     []string
 	Services       []Service
 }
 
-var ServiceMutex sync.RWMutex
-var Services []Service
+var serviceMutex sync.RWMutex
+var services []Service
 var config   Config
 
 //go:embed all:static
 var staticFiles embed.FS
 
-func servicesFromTokenUrl(token, url string) (services []Service, err error) {
+func servicesFromTokenUrl(token, url string, namespaces []string) (services []Service, err error) {
 	request, err := http.NewRequest("GET", url + "/v1/services?namespace=*", nil)
 	if err != nil {
 		return
@@ -57,9 +58,9 @@ func servicesFromTokenUrl(token, url string) (services []Service, err error) {
 	defer response.Body.Close()
 
 	// Get namespaces from request.
-	var namespaces []NomadNamespace
+	var nomadNamespaces []NomadNamespace
 	if response.StatusCode == http.StatusOK {
-		err = json.NewDecoder(response.Body).Decode(&namespaces)
+		err = json.NewDecoder(response.Body).Decode(&nomadNamespaces)
 		if err != nil {
 			return 
 		}
@@ -67,14 +68,13 @@ func servicesFromTokenUrl(token, url string) (services []Service, err error) {
 
 	// Extract services from pererred namespaces.
 	nomadServices := make(map[string]NomadService)
-	preferredNamespaces := []string{ "prod", "backup" }
-	for _, preferredNamespace := range preferredNamespaces {
-		index := slices.IndexFunc(namespaces, func (namespace NomadNamespace ) bool { return namespace.Name == preferredNamespace })
+	for _, preferredNamespace := range namespaces {
+		index := slices.IndexFunc(nomadNamespaces, func (namespace NomadNamespace ) bool { return namespace.Name == preferredNamespace })
 		if index == -1 {
 			continue
 		}
 
-		for _, service := range namespaces[index].Services {
+		for _, service := range nomadNamespaces[index].Services {
 			// Skip if have already registered this service.
 			if _, ok := nomadServices[service.Name]; ok {
 				continue
@@ -117,25 +117,25 @@ func servicesFromTokenUrl(token, url string) (services []Service, err error) {
 func update() {
 	updateInterval := time.Tick(time.Duration(config.UpdateInterval) * time.Second)
 	for ;; <-updateInterval {
-		services, err := servicesFromTokenUrl(config.Token, config.Url)
+		newServices, err := servicesFromTokenUrl(config.Token, config.Url, config.Namespaces)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
 		// Add static services.
-		services = append(services, config.Services...)
+		newServices = append(newServices, config.Services...)
 
-		ServiceMutex.Lock()
-		Services = services
-		ServiceMutex.Unlock()
+		serviceMutex.Lock()
+		services = newServices
+		serviceMutex.Unlock()
 	}
 }
 
 func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
-	ServiceMutex.RLock()
-	encoded, err := json.Marshal(Services)
-	ServiceMutex.RUnlock()
+	serviceMutex.RLock()
+	encoded, err := json.Marshal(services)
+	serviceMutex.RUnlock()
 
 	if err != nil {
 		response.WriteHeader(http.StatusMethodNotAllowed)

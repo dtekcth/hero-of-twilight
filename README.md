@@ -13,6 +13,8 @@ The configuration file is a JSON object with the following keys:
 * `token`: Your Nomad access token. Only needs `namespace:read-job` permission
 * `url`: The address of your Nomad instance
 * `updateInterval`: How often to query Nomad for services, specified in seconds
+* `namespaces`: A list of namespaces to pick services from. Services are
+  grabbed from the first namespace they are found in
 * `services`: An array of objects describing static services to always include.
   See below for a description of supported keys.
 
