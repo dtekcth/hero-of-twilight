@@ -147,7 +147,16 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	response.Write(encoded)
 }
 
+func middlewareLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		log.Printf("\"%s %s %s\" \"%s\"\n", request.Method, request.URL.Path, request.Proto, strings.Join(request.Header["User-Agent"], ", "))
+		next.ServeHTTP(response, request)
+	})
+}
+
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
 	configBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
 		log.Fatal(err)
@@ -161,11 +170,12 @@ func main() {
 	go update()
 
 	// Setup and start server.
+	mux := http.NewServeMux()
 	serverRoot, _ := fs.Sub(staticFiles, "static")
-	http.Handle("/", http.FileServer(http.FS(serverRoot)))
-	http.HandleFunc("GET /api/v1/services", handleApiV1Services)
+	mux.Handle("/", http.FileServer(http.FS(serverRoot)))
+	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
