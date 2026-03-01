@@ -1,0 +1,10 @@
+services:
+  hero-of-twilight:
+    build: .
+    restart: always
+    environment:
+      TS: Europe/Stockholm
+    ports:
+      - 8080:8080
+    volumes:
+      - ./config.json:/hero-of-twilight/config.json
