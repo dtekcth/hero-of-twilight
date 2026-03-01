@@ -1,14 +1,16 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
+	"io/fs"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-	"io/ioutil"
 )
 
 type NomadService struct {
@@ -37,6 +39,9 @@ type Config struct {
 var ServiceMutex sync.RWMutex
 var Services []Service
 var config   Config
+
+//go:embed all:static
+var staticFiles embed.FS
 
 func servicesFromTokenUrl(token, url string) (services []Service, err error) {
 	request, err := http.NewRequest("GET", url + "/v1/services?namespace=*", nil)
@@ -156,7 +161,8 @@ func main() {
 	go update()
 
 	// Setup and start server.
-	http.Handle("/", http.FileServer(http.Dir("static")))
+	serverRoot, _ := fs.Sub(staticFiles, "static")
+	http.Handle("/", http.FileServer(http.FS(serverRoot)))
 	http.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
