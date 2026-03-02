@@ -149,7 +149,7 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	serviceMutex.RUnlock()
 
 	if err != nil {
-		response.WriteHeader(http.StatusMethodNotAllowed)
+		response.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
