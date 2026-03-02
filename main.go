@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -42,6 +43,7 @@ type Config struct {
 var serviceMutex sync.RWMutex
 var services []Service
 var config   Config
+var errorLog *log.Logger
 
 //go:embed all:static
 var staticFiles embed.FS
@@ -127,13 +129,14 @@ func update() {
 	for ;; <-updateInterval {
 		newServices, err := servicesFromTokenUrl(config.Token, config.url, config.Namespaces)
 		if err != nil {
-			log.Println(err)
-			return
+			errorLog.Println(err)
+			continue
 		}
 
 		// Add static services.
 		newServices = append(newServices, config.Services...)
 
+		// Update global list.
 		serviceMutex.Lock()
 		services = newServices
 		serviceMutex.Unlock()
@@ -165,18 +168,18 @@ func middlewareLogger(next http.Handler) http.Handler {
 func readConfig() {
 	configBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
-		log.Fatal(err)
+		errorLog.Fatal(err)
 	}
 
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		log.Fatal(err)
+		errorLog.Fatal(err)
 	}
 
 	// Validate and set defaults
 	config.url, err = url.Parse(config.UrlString)
 	if err != nil {
-		log.Fatal(err)
+		errorLog.Fatal(err)
 	}
 
 	if config.UpdateInterval == 0 {
@@ -191,7 +194,10 @@ func readConfig() {
 }
 
 func main() {
+	// Setup loggers.
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	log.SetOutput(os.Stdout)
+	errorLog = log.New(os.Stderr, "", log.Flags())
 
 	readConfig()
 
@@ -204,6 +210,6 @@ func main() {
 	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
 	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {
-		log.Fatal(err)
+		errorLog.Fatal(err)
 	}
 }
