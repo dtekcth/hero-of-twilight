@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -31,7 +32,8 @@ type Service struct {
 
 type Config struct {
 	Token          string
-	Url            string
+	UrlString      string `json:"url"`
+	url            *url.URL
 	UpdateInterval int
 	Namespaces     []string
 	Services       []Service
@@ -44,8 +46,14 @@ var config   Config
 //go:embed all:static
 var staticFiles embed.FS
 
-func servicesFromTokenUrl(token, url string, namespaces []string) (services []Service, err error) {
-	request, err := http.NewRequest("GET", url + "/v1/services?namespace=*", nil)
+func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (services []Service, err error) {
+	// Build request URL.
+	requestUrl := baseUrl.JoinPath("v1", "services")
+	requestQuery := url.Values{}
+	requestQuery.Set("namespace", "*")
+	requestUrl.RawQuery = requestQuery.Encode()
+
+	request, err := http.NewRequest("GET", requestUrl.String(), nil)
 	if err != nil {
 		return
 	}
@@ -117,7 +125,7 @@ func servicesFromTokenUrl(token, url string, namespaces []string) (services []Se
 func update() {
 	updateInterval := time.Tick(time.Duration(config.UpdateInterval) * time.Second)
 	for ;; <-updateInterval {
-		newServices, err := servicesFromTokenUrl(config.Token, config.Url, config.Namespaces)
+		newServices, err := servicesFromTokenUrl(config.Token, config.url, config.Namespaces)
 		if err != nil {
 			log.Println(err)
 			return
@@ -154,9 +162,7 @@ func middlewareLogger(next http.Handler) http.Handler {
 	})
 }
 
-func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-
+func readConfig() {
 	configBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
 		log.Fatal(err)
@@ -166,6 +172,28 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Validate and set defaults
+	config.url, err = url.Parse(config.UrlString)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if config.UpdateInterval == 0 {
+		log.Println("\"updateInterval\" not specified in config.json, defaulting to 60s")
+		config.UpdateInterval = 60
+	}
+
+	if len(config.Namespaces) == 0 {
+		log.Println("\"namespaces\" not specified in config.json, defaulting to \"default\"")
+		config.Namespaces = append(config.Namespaces, "default")
+	}
+}
+
+func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
+	readConfig()
 
 	go update()
 
