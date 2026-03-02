@@ -27,10 +27,11 @@ async function update() {
         const card = document.importNode(cardTemplate.content, true);
 
         const name        = card.querySelector(".name");
+        const container   = card.querySelector(".card");
         const description = card.querySelector(".description");
 
-        name.textContent = service.name;
-        name.setAttribute("href", service.link);
+        name.textContent        = service.name;
+        container.href          = service.link;
         description.textContent = service.description;
 
         return card;
