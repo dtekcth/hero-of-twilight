@@ -29,3 +29,5 @@ go.work.sum
 # .vscode/
 
 config.json
+.direnv/
+.envrc
