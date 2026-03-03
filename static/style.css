@@ -1,17 +1,19 @@
 @media (prefers-color-scheme: light) {
     :root {
-        --text-color:       black;
-        --background-color: white;
-        --border-color:     lightgray;
+        --text-color:       hsl(210, 6%, 20%);
+        --background-color: hsl(30, 6%, 94%);
+        --card-color:       hsl(30, 6%, 90%);
+        --border-color:     hsl(30, 6%, 86%);
         --error-color:      rgba(255, 0, 0, 0.5);
     }
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --text-color:       white;
-        --background-color: black;
-        --border-color:     gray;
+        --text-color:       #bcbdd0;
+        --background-color: hsl(226, 23%, 11%);
+        --card-color:       hsl(226, 23%, 16%);
+        --border-color:     hsl(226, 23%, 21%);
         --error-color:      rgba(255, 0, 0, 0.5);
     }
 }
@@ -46,6 +48,7 @@ a {
 
 .card {
     border: 2px solid var(--border-color);
+    background-color: var(--card-color);
     padding-left:  1em;
     padding-right: 1em;
     border-radius: 1em;
