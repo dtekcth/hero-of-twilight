@@ -3,8 +3,6 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"io/fs"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -13,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"html/template"
 )
 
 type NomadService struct {
@@ -32,6 +31,8 @@ type Service struct {
 }
 
 type Config struct {
+	Name           string
+	Description    string
 	Token          string
 	UrlString      string `json:"url"`
 	url            *url.URL
@@ -44,6 +45,10 @@ var serviceMutex sync.RWMutex
 var services []Service
 var config   Config
 var errorLog *log.Logger
+
+//go:embed templates/index.gohtml
+var indexTemplate string
+var index *template.Template
 
 //go:embed all:static
 var staticFiles embed.FS
@@ -158,6 +163,10 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	response.Write(encoded)
 }
 
+func handleIndex(response http.ResponseWriter, request *http.Request) {
+	index.Execute(response, config)
+}
+
 func middlewareLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		log.Printf("\"%s %s %s\" \"%s\"\n", request.Method, request.URL.Path, request.Proto, strings.Join(request.Header["User-Agent"], ", "))
@@ -166,7 +175,7 @@ func middlewareLogger(next http.Handler) http.Handler {
 }
 
 func readConfig() {
-	configBytes, err := ioutil.ReadFile("config.json")
+	configBytes, err := os.ReadFile("config.json")
 	if err != nil {
 		errorLog.Fatal(err)
 	}
@@ -200,13 +209,14 @@ func main() {
 	errorLog = log.New(os.Stderr, "", log.Flags())
 
 	readConfig()
+	index = template.Must(template.New("index.html").Parse(indexTemplate))
 
 	go update()
 
 	// Setup and start server.
 	mux := http.NewServeMux()
-	serverRoot, _ := fs.Sub(staticFiles, "static")
-	mux.Handle("/", http.FileServer(http.FS(serverRoot)))
+    mux.HandleFunc("/", handleIndex)
+    mux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
 	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
 	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {

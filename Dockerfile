@@ -5,6 +5,7 @@ WORKDIR /hero-of-twilight
 # Copy sources
 COPY go.mod main.go .
 COPY static/ static/
+COPY templates/ templates/
 
 # Compile
 RUN go build -o server .
