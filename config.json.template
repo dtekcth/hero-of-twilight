@@ -1,7 +1,7 @@
 {
     "name": "NAME",
     "description": "DESCRIPTION",
-    "url": "URL",
+    "url": "https://nomad.example.com",
     "token": "TOKEN",
     "updateInterval": 60,
     "namespaces": [
@@ -9,9 +9,9 @@
     ],
     "services": [
         {
-            "name": "DuckDuckGo",
-            "description": "The search engine",
-            "link": "https://duckduckgo.com/"
+            "name": "Example",
+            "description": "The example",
+            "link": "https://example.com/"
         }
     ]
 }
