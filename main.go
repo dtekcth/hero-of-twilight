@@ -45,13 +45,12 @@ var serviceMutex sync.RWMutex
 var services []Service
 var config   Config
 var errorLog *log.Logger
-
-//go:embed templates/index.gohtml
-var indexTemplate string
-var index *template.Template
+var templates *template.Template
 
 //go:embed all:static
 var staticFiles embed.FS
+//go:embed all:templates
+var templateFiles embed.FS
 
 func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (services []Service, err error) {
 	// Build request URL.
@@ -164,7 +163,10 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 }
 
 func handleIndex(response http.ResponseWriter, request *http.Request) {
-	index.Execute(response, config)
+	err := templates.ExecuteTemplate(response, "index.gohtml", config)
+	if err != nil {
+		errorLog.Println(err)
+	}
 }
 
 func middlewareLogger(next http.Handler) http.Handler {
@@ -209,7 +211,7 @@ func main() {
 	errorLog = log.New(os.Stderr, "", log.Flags())
 
 	readConfig()
-	index = template.Must(template.New("index.html").Parse(indexTemplate))
+	templates = template.Must(template.ParseFS(templateFiles, "**/*.gohtml"))
 
 	go update()
 
