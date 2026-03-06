@@ -3,8 +3,10 @@
 Link discovery of Nomad services.
 
 Create a `config.json` with your Nomad token, Nomad URL and any static services
-you want to list (see `config.json.template` for an example). Then run `go run .`
-to start a local server. The server runs on port 8080.
+you want to list (see `config.json.template` for an example). Then run `go run
+.` to start a local server. The server runs on port 8080. For local development
+you can intead use `go run . -reload` to reaload static files and templates
+when you refreshing the page.
 
 ## Configuration
 

@@ -3,6 +3,9 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"flag"
+	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -11,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"html/template"
 )
 
 type NomadService struct {
@@ -41,11 +43,27 @@ type Config struct {
 	Services       []Service
 }
 
+type TemplateExecutor interface {
+	ExecuteTemplate(writer io.Writer, name string, data any) error
+}
+
+type DebugTemplateExecutor struct {
+	Glob string
+}
+
+func (executor DebugTemplateExecutor) ExecuteTemplate(writer io.Writer, name string, data any) error {
+	templates, err := template.ParseGlob(executor.Glob)
+	if err != nil {
+		return err
+	}
+	return templates.ExecuteTemplate(writer, name,  data)
+}
+
 var serviceMutex sync.RWMutex
 var services []Service
 var config   Config
 var errorLog *log.Logger
-var templates *template.Template
+var templateExecutor TemplateExecutor
 
 //go:embed all:static
 var staticFiles embed.FS
@@ -163,7 +181,7 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 }
 
 func handleIndex(response http.ResponseWriter, request *http.Request) {
-	err := templates.ExecuteTemplate(response, "index.gohtml", config)
+	err := templateExecutor.ExecuteTemplate(response, "index.gohtml", config)
 	if err != nil {
 		errorLog.Println(err)
 	}
@@ -210,15 +228,28 @@ func main() {
 	log.SetOutput(os.Stdout)
 	errorLog = log.New(os.Stderr, "", log.Flags())
 
+	// Parse command line arguments.
+	reload := flag.Bool("reload", false, "reload static files and templates on page refresh")
+	flag.Parse()
+
 	readConfig()
-	templates = template.Must(template.ParseFS(templateFiles, "**/*.gohtml"))
+
+	// Setup handlers for reloading of static files.
+	var staticHandler http.Handler
+	if *reload {
+		templateExecutor = DebugTemplateExecutor{"templates/*.gohtml"}
+		staticHandler    = http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
+	} else {
+		templateExecutor = template.Must(template.ParseFS(templateFiles, "**/*.gohtml"))
+		staticHandler    = http.FileServerFS(staticFiles)
+	}
 
 	go update()
 
 	// Setup and start server.
 	mux := http.NewServeMux()
-    mux.HandleFunc("/", handleIndex)
-    mux.Handle("/static/", http.FileServer(http.FS(staticFiles)))
+	mux.HandleFunc("/", handleIndex)
+	mux.Handle("/static/", staticHandler)
 	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
 
 	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {
