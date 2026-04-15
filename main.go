@@ -30,6 +30,12 @@ type Service struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Link        string `json:"link"`
+	Category    string `json:"category"`
+}
+
+type Category struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Config struct {
@@ -41,6 +47,7 @@ type Config struct {
 	UpdateInterval int
 	Namespaces     []string
 	Services       []Service
+	Categories     []Category
 }
 
 type TemplateExecutor interface {
@@ -138,6 +145,7 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 			Name:        name,
 			Description: description,
 			Link:        link,
+			Category:    tags["link-discovery.category"],
 		}
 
 		services = append(services, service)
@@ -158,6 +166,15 @@ func update() {
 		// Add static services.
 		newServices = append(newServices, config.Services...)
 
+		// Apply default values to optional fields.
+		for i, service := range newServices {
+			if service.Category == "" {
+				service.Category = "default"
+			}
+
+			newServices[i] = service
+		}
+
 		// Update global list.
 		serviceMutex.Lock()
 		services = newServices
@@ -168,6 +185,21 @@ func update() {
 func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	serviceMutex.RLock()
 	encoded, err := json.Marshal(services)
+	serviceMutex.RUnlock()
+
+	if err != nil {
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	response.WriteHeader(http.StatusOK)
+	response.Write(encoded)
+}
+
+func handleApiV1Categories(response http.ResponseWriter, request *http.Request) {
+	serviceMutex.RLock()
+	encoded, err := json.Marshal(config.Categories)
 	serviceMutex.RUnlock()
 
 	if err != nil {
@@ -205,7 +237,7 @@ func readConfig() {
 		errorLog.Fatal(err)
 	}
 
-	// Validate and set defaults
+	// Validate and set defaults.
 	config.url, err = url.Parse(config.UrlString)
 	if err != nil {
 		errorLog.Fatal(err)
@@ -219,6 +251,31 @@ func readConfig() {
 	if len(config.Namespaces) == 0 {
 		log.Println("\"namespaces\" not specified in config.json, defaulting to \"default\"")
 		config.Namespaces = append(config.Namespaces, "default")
+	}
+
+	categoryIndex := 0
+	for i, category := range config.Categories {
+		isBad := false
+		if category.Id == "" {
+			isBad = true
+			log.Printf("Category at index %v has an empty id, removing\n", i)
+		}
+
+		if category.Name == "" {
+			isBad = true
+			log.Printf("Category at index %v has an empty name, removing\n", i)
+		}
+
+		if !isBad {
+			config.Categories[categoryIndex] = category
+			categoryIndex += 1
+		}
+	}
+	config.Categories = config.Categories[:categoryIndex]
+
+	if len(config.Categories) == 0 {
+		log.Println("\"categories\" not specified in config.json, defaulting to \"default: Default\"")
+		config.Categories = append(config.Categories, Category {Id: "default", Name: "Default"})
 	}
 }
 
@@ -250,7 +307,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
 	mux.Handle("/static/", staticHandler)
-	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
+	mux.HandleFunc("GET /api/v1/services",   handleApiV1Services)
+	mux.HandleFunc("GET /api/v1/categories", handleApiV1Categories)
 
 	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {
 		errorLog.Fatal(err)

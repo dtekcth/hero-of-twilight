@@ -9,9 +9,30 @@
     ],
     "services": [
         {
+            "name": "DuckDuckGo",
+            "description": "The search engine",
+            "link": "https://duckduckgo.com/",
+            "category": "search-engines"
+        },
+        {
             "name": "Example",
             "description": "The example",
-            "link": "https://example.com/"
+            "link": "https://example.com/",
+        },
+        {
+            "name": "Other Example",
+            "description": "The other example",
+            "link": "https://example.com/example",
+        }
+    ],
+    "categories": [
+        {
+            "id": "search-engines",
+            "name": "Search engines"
+        },
+        {
+            "id": "default",
+            "name": "Other"
         }
     ]
 }
