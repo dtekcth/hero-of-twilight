@@ -11,6 +11,12 @@
         <script src="/static/index.js"></script>
     </head>
     <body>
+        <template id="boardTemplate">
+            <div class="board">
+                <h2 class="name"></h2>
+                <div class="cardHolder"></div>
+            </div>
+        </template>
         <template id="cardTemplate">
             <a class="card">
                 <h2 class="name"></h2>
@@ -26,8 +32,7 @@
                 <h2>Error</h2>
                 <p id="errorMessage"></p>
             </div>
-            <div id="cardHolder" class="cardHolder">
-            </div>
+            <div id="boardHolder" class="boardHolder"></div>
         </main>
     </body>
 </html>

@@ -19,14 +19,25 @@ The configuration file is a JSON object with the following keys:
   grabbed from the first namespace they are found in
 * `services`: An array of objects describing static services to always include.
   See below for a description of supported keys.
+* `categories`: An array of objects describing categories. Categories are
+  displayed in the order they are defined. If a service has a category that is
+  not defined, that service is not displayed.
 
-## Services
+### Services
 
 Services have the following attributes:
 
 * `name`: The name of the service (required)
 * `description`: A short description of the service (required)
 * `link`: A link to the service (required)
+* `category`: ID of the category to place this service under (optional, default value "default")
+
+### Categories
+
+Categories have the following attributes:
+
+* `id`: The ID of the category (required)
+* `name`: The name of the category (required)
 
 ## Nomad tags
 
