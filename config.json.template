@@ -17,12 +17,12 @@
         {
             "name": "Example",
             "description": "The example",
-            "link": "https://example.com/",
+            "link": "https://example.com/"
         },
         {
             "name": "Other Example",
             "description": "The other example",
-            "link": "https://example.com/example",
+            "link": "https://example.com/example"
         }
     ],
     "categories": [
