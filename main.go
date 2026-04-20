@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -61,23 +62,22 @@ type DebugTemplateExecutor struct {
 func (executor DebugTemplateExecutor) ExecuteTemplate(writer io.Writer, name string, data any) error {
 	templates, err := template.ParseGlob(executor.Glob)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse glob: %w", err)
 	}
-	return templates.ExecuteTemplate(writer, name,  data)
+	return templates.ExecuteTemplate(writer, name, data)
 }
 
 var serviceMutex sync.RWMutex
 var services []Service
-var config   Config
 var errorLog *log.Logger
-var templateExecutor TemplateExecutor
 
 //go:embed all:static
 var staticFiles embed.FS
+
 //go:embed all:templates
 var templateFiles embed.FS
 
-func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (services []Service, err error) {
+func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) ([]Service, error) {
 	// Build request URL.
 	requestUrl := baseUrl.JoinPath("v1", "services")
 	requestQuery := url.Values{}
@@ -86,13 +86,13 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 
 	request, err := http.NewRequest("GET", requestUrl.String(), nil)
 	if err != nil {
-		return
+		return []Service{}, fmt.Errorf("new request: %w", err)
 	}
 	request.Header.Add("X-Nomad-Token", token)
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return
+		return []Service{}, fmt.Errorf("do: %w", err)
 	}
 	defer response.Body.Close()
 
@@ -101,14 +101,14 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 	if response.StatusCode == http.StatusOK {
 		err = json.NewDecoder(response.Body).Decode(&nomadNamespaces)
 		if err != nil {
-			return 
+			return []Service{}, fmt.Errorf("decode: %w", err)
 		}
 	}
 
 	// Extract services from pererred namespaces.
-	nomadServices := make(map[string]NomadService)
+	nomadServices := map[string]NomadService{}
 	for _, preferredNamespace := range namespaces {
-		index := slices.IndexFunc(nomadNamespaces, func (namespace NomadNamespace ) bool { return namespace.Name == preferredNamespace })
+		index := slices.IndexFunc(nomadNamespaces, func(namespace NomadNamespace) bool { return namespace.Name == preferredNamespace })
 		if index == -1 {
 			continue
 		}
@@ -133,15 +133,15 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 		}
 
 		// Extract required tags.
-		name,        hasName        := tags["link-discovery.name"]
+		name, hasName := tags["link-discovery.name"]
 		description, hasDescription := tags["link-discovery.description"]
-		link,        hasLink        := tags["link-discovery.link"]
+		link, hasLink := tags["link-discovery.link"]
 
 		if !(hasName && hasDescription && hasLink) {
 			continue
 		}
 
-		service := Service {
+		service := Service{
 			Name:        name,
 			Description: description,
 			Link:        link,
@@ -151,15 +151,15 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 		services = append(services, service)
 	}
 
-	return
+	return services, nil
 }
 
-func update() {
+func update(config Config) {
 	updateInterval := time.Tick(time.Duration(config.UpdateInterval) * time.Second)
-	for ;; <-updateInterval {
+	for ; ; <-updateInterval {
 		newServices, err := servicesFromTokenUrl(config.Token, config.url, config.Namespaces)
 		if err != nil {
-			errorLog.Println(err)
+			errorLog.Println(fmt.Errorf("services from token url: %w", err))
 			continue
 		}
 
@@ -197,26 +197,30 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 	response.Write(encoded)
 }
 
-func handleApiV1Categories(response http.ResponseWriter, request *http.Request) {
-	serviceMutex.RLock()
-	encoded, err := json.Marshal(config.Categories)
-	serviceMutex.RUnlock()
+func handleApiV1Categories(config Config) http.HandlerFunc {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		serviceMutex.RLock()
+		encoded, err := json.Marshal(config.Categories)
+		serviceMutex.RUnlock()
 
-	if err != nil {
-		response.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		if err != nil {
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	response.Header().Set("Content-Type", "application/json")
-	response.WriteHeader(http.StatusOK)
-	response.Write(encoded)
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(http.StatusOK)
+		response.Write(encoded)
+	})
 }
 
-func handleIndex(response http.ResponseWriter, request *http.Request) {
-	err := templateExecutor.ExecuteTemplate(response, "index.gohtml", config)
-	if err != nil {
-		errorLog.Println(err)
-	}
+func handleIndex(config Config, templateExecutor TemplateExecutor) http.HandlerFunc {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		err := templateExecutor.ExecuteTemplate(response, "index.gohtml", config)
+		if err != nil {
+			errorLog.Println(fmt.Errorf("execute template: %w", err))
+		}
+	})
 }
 
 func middlewareLogger(next http.Handler) http.Handler {
@@ -226,21 +230,22 @@ func middlewareLogger(next http.Handler) http.Handler {
 	})
 }
 
-func readConfig() {
+func readConfig() (Config, error) {
 	configBytes, err := os.ReadFile("config.json")
 	if err != nil {
-		errorLog.Fatal(err)
+		return Config{}, err
 	}
 
+	var config Config
 	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		errorLog.Fatal(err)
+		return Config{}, err
 	}
 
 	// Validate and set defaults.
 	config.url, err = url.Parse(config.UrlString)
 	if err != nil {
-		errorLog.Fatal(err)
+		return Config{}, err
 	}
 
 	if config.UpdateInterval == 0 {
@@ -253,30 +258,31 @@ func readConfig() {
 		config.Namespaces = append(config.Namespaces, "default")
 	}
 
-	categoryIndex := 0
+	filteredCategories := make([]Category, 0, len(config.Categories))
 	for i, category := range config.Categories {
-		isBad := false
+		isGood := true
 		if category.Id == "" {
-			isBad = true
+			isGood = false
 			log.Printf("Category at index %v has an empty id, removing\n", i)
 		}
 
 		if category.Name == "" {
-			isBad = true
+			isGood = false
 			log.Printf("Category at index %v has an empty name, removing\n", i)
 		}
 
-		if !isBad {
-			config.Categories[categoryIndex] = category
-			categoryIndex += 1
+		if isGood {
+			filteredCategories = append(filteredCategories, category)
 		}
 	}
-	config.Categories = config.Categories[:categoryIndex]
+	config.Categories = filteredCategories
 
 	if len(config.Categories) == 0 {
 		log.Println("\"categories\" not specified in config.json, defaulting to \"default: Default\"")
-		config.Categories = append(config.Categories, Category {Id: "default", Name: "Default"})
+		config.Categories = append(config.Categories, Category{Id: "default", Name: "Default"})
 	}
+
+	return config, nil
 }
 
 func main() {
@@ -289,28 +295,33 @@ func main() {
 	reload := flag.Bool("reload", false, "reload static files and templates on page refresh")
 	flag.Parse()
 
-	readConfig()
+	config, err := readConfig()
+	if err != nil {
+		log.Fatal(fmt.Errorf("read config: %w", err))
+	}
 
 	// Setup handlers for reloading of static files.
 	var staticHandler http.Handler
+	var templateExecutor TemplateExecutor
 	if *reload {
 		templateExecutor = DebugTemplateExecutor{"templates/*.gohtml"}
-		staticHandler    = http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
+		staticHandler = http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
 	} else {
 		templateExecutor = template.Must(template.ParseFS(templateFiles, "**/*.gohtml"))
-		staticHandler    = http.FileServerFS(staticFiles)
+		staticHandler = http.FileServerFS(staticFiles)
 	}
 
-	go update()
+	go update(config)
 
 	// Setup and start server.
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/", handleIndex(config, templateExecutor))
 	mux.Handle("/static/", staticHandler)
-	mux.HandleFunc("GET /api/v1/services",   handleApiV1Services)
-	mux.HandleFunc("GET /api/v1/categories", handleApiV1Categories)
+	mux.HandleFunc("GET /api/v1/services", handleApiV1Services)
+	mux.HandleFunc("GET /api/v1/categories", handleApiV1Categories(config))
 
+	log.Println("Serving on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", middlewareLogger(mux)); err != nil {
-		errorLog.Fatal(err)
+		errorLog.Fatal(fmt.Errorf("listen and serve: %v", err))
 	}
 }
