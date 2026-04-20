@@ -52,7 +52,7 @@ async function update() {
         }
 
         // Sort services by name.
-        services => services.sort((a, b) => collator.compare(a.name, b.name));
+        services.sort((a, b) => collator.compare(a.name, b.name));
 
         // Build cards.
         const cards = services.map(service => {
