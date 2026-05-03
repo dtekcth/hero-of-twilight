@@ -35,7 +35,9 @@ async function update() {
     // Collect into categories.
     const categoryServices = new Map();
     for (const service of services) {
-        categoryServices.getOrInsert(service.category, []).push(service);
+        const services = categoryServices.get(service.category) ?? [];
+        services.push(service);
+        categoryServices.set(service.category, services);
     }
 
     const collator      = new Intl.Collator();
