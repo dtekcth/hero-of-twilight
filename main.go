@@ -67,8 +67,8 @@ func (executor DebugTemplateExecutor) ExecuteTemplate(writer io.Writer, name str
 	return templates.ExecuteTemplate(writer, name, data)
 }
 
-var serviceMutex sync.RWMutex
-var services []Service
+var globalServiceMutex sync.RWMutex
+var globalServices []Service
 var errorLog *log.Logger
 
 //go:embed all:static
@@ -124,6 +124,7 @@ func servicesFromTokenUrl(token string, baseUrl *url.URL, namespaces []string) (
 	}
 
 	// Extract link discovery information from services.
+	services := []Service{}
 	for _, nomadService := range nomadServices {
 		// Extract tags to key-value map.
 		tags := make(map[string]string)
@@ -176,16 +177,16 @@ func update(config Config) {
 		}
 
 		// Update global list.
-		serviceMutex.Lock()
-		services = newServices
-		serviceMutex.Unlock()
+		globalServiceMutex.Lock()
+		globalServices = newServices
+		globalServiceMutex.Unlock()
 	}
 }
 
 func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
-	serviceMutex.RLock()
-	encoded, err := json.Marshal(services)
-	serviceMutex.RUnlock()
+	globalServiceMutex.RLock()
+	encoded, err := json.Marshal(globalServices)
+	globalServiceMutex.RUnlock()
 
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -199,9 +200,7 @@ func handleApiV1Services(response http.ResponseWriter, request *http.Request) {
 
 func handleApiV1Categories(config Config) http.HandlerFunc {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		serviceMutex.RLock()
 		encoded, err := json.Marshal(config.Categories)
-		serviceMutex.RUnlock()
 
 		if err != nil {
 			response.WriteHeader(http.StatusInternalServerError)
