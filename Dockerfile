@@ -1,5 +1,5 @@
 # Build
-FROM golang:1.25.4-alpine3.22 AS build
+FROM golang:1.27-alpine3.24 AS build
 WORKDIR /hero-of-twilight
 
 # Copy sources
@@ -11,10 +11,10 @@ COPY templates/ templates/
 RUN go build -o server .
 
 # Run
-FROM alpine:3.23.2
+FROM alpine:3.24
 WORKDIR /hero-of-twilight
 
 # Copy binary and static files
 COPY --from=build /hero-of-twilight/server /hero-of-twilight/server
 
-CMD /hero-of-twilight/server
+CMD ["/hero-of-twilight/server"]
