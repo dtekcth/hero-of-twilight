@@ -1,12 +1,22 @@
-name: Publish Docker Image
+name: Create release and deploy
 
 on:
-  push:
-    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      update_type:
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
-  build-and-push-image:
-    uses: dtekcth/workflows/.github/workflows/docker-publish.yml@49637020f4d7f23a0f4f2c41b50aac6cfa2cfc73 # v1.4.0
+  create-release-and-deploy:
+    uses: dtekcth/workflows/.github/workflows/create-release-and-deploy.yml@49637020f4d7f23a0f4f2c41b50aac6cfa2cfc73 # v1.4.0
     permissions:
-      contents: read
+      contents: write
       packages: write
+    with:
+        update_type: ${{ inputs.update_type }}
